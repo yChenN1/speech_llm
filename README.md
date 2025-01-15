@@ -1,6 +1,6 @@
 # Music Generation/TTS with Large Language Models
 
-This repository contains the PyTorch implementation of music generation/text-to-speech (TTS) with LLaMA-based large language models (LLMs). This repo converts both texts and audio into discrete tokens. In training, the LLM system is trained with next discrete ID prediction. In sampling, the system generate discrete audio IDs in an autoregressive way. The figure below shows the training of the LLM.
+This repository contains a PyTorch implementation of music generation and text-to-speech (TTS) using LLaMA-based large language models (LLMs). During training, the system converts both text and audio into discrete tokens. the LLM system is trained to predict the next discrete ID. During sampling, the system generates discrete audio IDs in an autoregressive manner. The figure below illustrates the training process of the LLM. Users can train a music generation model in less than 10 hours using a single RTX 4090 GPU.
 
 <img src="./assets/llm.png" width="600">
 
@@ -23,13 +23,20 @@ bash env.sh
 
 ## 0. Download datasets
 
+To train TTS system, download LJSpeech dataset containing 24 hours of speech from a single speaker.
+
 ```bash
-# Download LJSpeech dataset containing 24 hours of speech from a single speaker
 wget -O LJSpeech-1.1.tar.bz2 https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2
 mkdir -p ./datasets
-tar -xvf LJSpeech-1.1.tar.bz2 /datasets/
+tar -xvf LJSpeech-1.1.tar.bz2 -C ./datasets/
+wget -O ./datasets/LJSpeech-1.1/train.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/train.txt?download=true
+wget -O ./datasets/LJSpeech-1.1/valid.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/valid.txt?download=true
+wget -O ./datasets/LJSpeech-1.1/test.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/test.txt?download=true
+```
 
-# Download GTZAN music dataset containing 8 hours of music with 10 genres
+To train music generation system, download GTZAN music dataset containing 8 hours of music with 10 genres.
+
+```bash
 wget -O genres.tar.gz https://huggingface.co/datasets/marsyas/gtzan/resolve/main/data/genres.tar.gz?download=true
 mkdir -p ./datasets/gtzan
 tar -zxvf genres.tar.gz -C ./datasets/gtzan/
@@ -38,10 +45,15 @@ tar -zxvf genres.tar.gz -C ./datasets/gtzan/
 ## 1. Train
 
 ```python
-CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/gtzan.yaml"
+CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/ljspeech.yaml"
 ```
 
-The training takes around 10 min to train for 100,000 steps on a single RTX4090 card. 
+
+
+
+
+
+The training takes around 10 hours to train for 100,000 steps on a single RTX4090 card. 
 
 ![Training & Validation Loss](assets/loss.png)
 
