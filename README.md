@@ -1,31 +1,47 @@
-# Minimal PyTorch implementation of GPT2 and Llama
+# Music Generation/TTS with Large Language Models
 
-This repository provides the minimal PyTorch implementation of GPT-2 and LLaMA. This repo simplifies the GPT-2 and LLaMA code for easier understanding and usage. This repo trains a natural language generation system with 1 million characters and converges in less than 5 minutes.
+This repository contains the PyTorch implementation of music generation/text-to-speech (TTS) with LLaMA-based large language models (LLMs). This repo converts both texts and audio into discrete tokens. In training, the LLM system is trained with next discrete ID prediction. In sampling, the system generate discrete audio IDs in an autoregressive way. The figure below shows the training of the LLM.
+
+<img src="./assets/llm.png" width="600">
 
 ## 0. Install dependencies
 
 ```bash
 # Clone the repo
-git clone https://github.com/qiuqiangkong/mini_llm
-cd mini_llm
+git clone https://github.com/qiuqiangkong/music_llm
+cd music_llm
 
 # Install Python environment
-conda create --name llm python=3.10
+conda create --name music_llm python=3.10
 
 # Activate environment
-conda activate llm
+conda activate music_llm
 
 # Install Python packages dependencies
 bash env.sh
 ```
 
+## 0. Download datasets
+
+```bash
+# Download LJSpeech dataset containing 24 hours of speech from a single speaker
+wget -O LJSpeech-1.1.tar.bz2 https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2
+mkdir -p ./datasets
+tar -xvf LJSpeech-1.1.tar.bz2 /datasets/
+
+# Download GTZAN music dataset containing 8 hours of music with 10 genres
+wget -O genres.tar.gz https://huggingface.co/datasets/marsyas/gtzan/resolve/main/data/genres.tar.gz?download=true
+mkdir -p ./datasets/gtzan
+tar -zxvf genres.tar.gz -C ./datasets/gtzan/
+```
+
 ## 1. Train
 
 ```python
-CUDA_VISIBLE_DEVICES=0 python train.py --model_name=Llama
+CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/gtzan.yaml"
 ```
 
-We train the languge model on the Shakespeares dataset with 1 million characters. The training takes around 20 min to train for 10,000 steps on a single RTX4090. 
+The training takes around 10 min to train for 100,000 steps on a single RTX4090 card. 
 
 ![Training & Validation Loss](assets/loss.png)
 
