@@ -6,3 +6,4 @@ pip install accelerate==1.2.1
 pip install audidata==0.0.2
 pip install librosa==0.10.2
 pip install descript-audio-codec
+pip install transformers==4.45.2
