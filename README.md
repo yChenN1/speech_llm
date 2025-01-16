@@ -37,12 +37,16 @@ bash ./scripts/download_gtzan.sh
 
 ## 1. Train
 
+Train TTS model:
+
 ```python
 CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/ljspeech.yaml"
 ```
 
+Train music generation model:
+
 ```python
-CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/gtzan.yaml"
+CUDA_VISIBLE_DEVICES=1 python train.py --config="./configs/gtzan.yaml"
 ```
 
 The training takes around 10 hours to train for 100,000 steps on a single RTX4090 GPU.
@@ -67,12 +71,6 @@ Users can sample audio from text prompts using trained checkpoints:
 CUDA_VISIBLE_DEVICES=0 python sample.py \
 	--config="./configs/ljspeech.yaml" \
 	--ckpt_path="./checkpoints/train/ljspeech/step=100000.pth"
-```
-
-```python
-CUDA_VISIBLE_DEVICES=0 python sample.py \
-	--config="./configs/gtzan.yaml" \
-	--ckpt_path="./checkpoints/train/gtzan/step=100000.pth"
 ```
 
 After training on 1 RTX4090 GPU for 100,000 stesp in 10 hours, the sampled audio sounds like:
