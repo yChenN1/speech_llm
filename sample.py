@@ -19,12 +19,8 @@ def sample(args):
     # Configs
     configs = parse_yaml(config_path)
 
-    start_char = "\n"
-    # num_samples = 5  # Number of samples to draw
     num_samples = 2  # Number of samples to draw
-    # max_new_ids = 2048  # Number of tokens generated in each sample
-    # max_new_ids = 1400
-    max_new_ids = configs["llm"]["block_size"] - configs["max_caption_len"]
+    max_new_ids = configs["llm"]["block_size"]  # Number of IDs generated
     temperature = 1.0  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
     top_k = 200  # Retain only the top_k most likely tokens, clamp others to have 0 probability
     
