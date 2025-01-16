@@ -78,10 +78,33 @@ CUDA_VISIBLE_DEVICES=0 python sample.py \
 The sampled audio sounds like:
 
 
-| Task       | Dataset         | Text prompt                                                                                                   | Sample                                                                                                                                                                                                                                                                                                                                                                                         |
-|------------|-----------------|---------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| TTS        | LJSpeech (24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | [sample0.wav](./assets/ljspeech/A%20happy%20dog%20ran%20through%20the%20park,%20wagging%20its%20tail%20excitedly,%20greeting%20everyone%20with%20joy%20and%20boundless%20energy._sample_0.wav) [sample1.wav](./assets/ljspeech/A%20happy%20dog%20ran%20through%20the%20park,%20wagging%20its%20tail%20excitedly,%20greeting%20everyone%20with%20joy%20and%20boundless%20energy._sample_1.wav") |
-| Music Gen  | GTZAN (8 h)     | country                                                                                                       | [sample0.wav](./assets/gtzan/country_sample_0.wav) [sample1.wav](./assets/gtzan/country_sample_1.wav)                                                                                                                                                                                                                                                                                          |
+| Task       | Dataset         | Text prompt                                                                                                   | Sample 1                                                                                      | Sample 2                                                                                                                                                                                                                                                                                                  |
+|------------|-----------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| TTS        | LJSpeech (24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | <video src="https://github.com/user-attachments/assets/5d7421e9-9f64-48a1-92c5-6cfee04a6e8c"> | <video src="https://github.com/user-attachments/assets/3433b3b7-2b48-42a9-a138-3b8166591a85"> |
+| Music Gen  | GTZAN (8 h)     | country                                                                                                       | <video src="https://github.com/user-attachments/assets/428dd426-787a-487b-9c32-197d61bfece3"> | <video src="https://github.com/user-attachments/assets/2655f774-7133-4a68-b3fc-11fd9786c79f"> |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
