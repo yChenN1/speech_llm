@@ -78,10 +78,11 @@ CUDA_VISIBLE_DEVICES=0 python sample.py \
 The sampled audio sounds like:
 
 
-| Task       | Dataset         | Text prompt | Duration (hours) | Size (GB) | Notes (millions) |
-|------------|-----------------|------------------|-----------|------------------|
-| TTS        | LJSpeech (24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_0 | [sample1.wav]("./assets/ljspeech/A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_0")            19.4 |      11.8 |             0.64 |
-| Music Gen  | GTZAN (8 h)     |            161.3 |      97.7 |             5.73 |
+| Task | Dataset         | Text prompt                                                                                                   | Sample                                                                                                                                                                                                                                                                                                                        |   |
+|------|-----------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---|
+| TTS  | LJSpeech (24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | [sample0.wav]("./assets/ljspeech/A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_0.wav") [sample1.wav]("./assets/ljspeech/A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_1.wav") |   |
+|      |                 |                                                                                                               |                                                                                                                                                                                                                                                                                                                               |   |
+|      |                 |                                                                                                               |                                                                                                                                                                                                                                                                                                                               |   |
 
 
 
