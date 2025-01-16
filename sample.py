@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import torch
 import soundfile
+import torch
 
-from train import get_audio_codec, get_tokenizer, get_llm
+from train import get_audio_codec, get_llm, get_tokenizer
 from utils import parse_yaml
 
 
@@ -40,36 +40,24 @@ def sample(args):
     llm.load_state_dict(torch.load(ckpt_path))
     llm.to(device)
 
-    # captions = ["blues", "classical", "country", "disco", "hiphop", "jazz", "metal", "pop", "reggae", "rock"] 
-    # captions = ['metal']
-    # captions = ["Fun and driving, featuring flute, alto and bari saxophones, upright bass, and drums that create a positive, upbeat mood"]
-    # captions = ["Violin playing and bass, fast drums that are happy"]
-    # captions = ["A happy dog"]
-    # captions = ["Giltspur Street, and the Poultry, or about four hundred and seventy-six in all."] 
-    # captions = ["The proposal made was to purchase some fifty thousand square feet between Newgate, Warwick Lane, and the Sessions House"]
-    # captions = ["All the latest news, opinions and analysis on Hong Kong, China, Asia and around the world."]
-    captions = ["A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy."]
+    # Users can change the captions here
+    captions = sample_captions(configs)
 
-    # captions = []
-    # for i in range(10):
-    #     caption = "speaker: {}, label: {}".format("nicolas", i)
-    #     captions.append(caption)
+    for caption in captions:
 
-    captions_list = [[caption] for caption in captions]
-
-    for captions in captions_list:
+        batch_caption = [caption]
 
         # Tokenize captions to IDs
         caption_ids = tokenizer.captions_to_ids(
-            captions=captions, 
+            captions=batch_caption, 
             fix_length=configs["max_caption_len"]
-        ).to(device)
-        # shape: (b, t_text)
+        ).to(device)  # shape: (b, t_text)
 
-
-        B = len(captions)
+        # Begin of audio ID
+        B = caption_ids.shape[0]
         audio_ids = torch.ones(size=(B, 1), dtype=torch.long, device=device) * tokenizer.boa_token_id
 
+        # Concatenate text prompt IDs and audio IDs
         input_ids = torch.cat((caption_ids, audio_ids), dim=1)
 
         # Sample    
@@ -82,22 +70,44 @@ def sample(args):
                     max_new_ids=max_new_ids, 
                     temperature=temperature, 
                     top_k=top_k
-                )
-                # shape: (b, t)
+                )  # shape: (b, t)
 
-            audio_codes = tokenizer.ids_to_audio_codes(ids)
+            audio_codes = tokenizer.ids_to_audio_codes(ids)  # shape: (b, q, t)
 
-            audio = codec.decode(audio_codes)
-            audio = audio.cpu().numpy()[0, 0]
+            audio = codec.decode(audio_codes)  # shape: (b, c, t)
+            audio = audio.cpu().numpy()[0]  # shape: (c, t)
 
             # print(n)
             for b in range(B):
-                results_dir = Path("results", Path(config_path).stem)
+                results_dir = Path("./results", Path(config_path).stem)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 audios_path = Path(results_dir, "{}_sample_{}.wav".format(captions[0], n))
-                soundfile.write(file=audios_path, data=audio, samplerate=sr)
+                soundfile.write(file=audios_path, data=audio.T, samplerate=sr)
                 print("Write out to {}".format(audios_path))
 
+
+def sample_captions(configs: dict) -> list[str]:
+
+    if "LJSpeech" in configs["train_datasets"]:
+
+        captions = ["A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy."]
+
+    elif "GTZAN" in configs["train_datasets"]:
+
+        captions = ["blues", "classical", "country", "disco", "hiphop", "jazz", 
+            "metal", "pop", "reggae", "rock"]
+
+    elif "FreeSpokenDigit" in configs["train_datasets"]:
+
+        captions = []
+        for i in range(10):
+            caption = "speaker: {}, label: {}".format("nicolas", i)
+            captions.append(caption)
+
+    else:
+        raise NotImplementedError
+
+    return captions
 
 if __name__ == "__main__":
 
