@@ -81,7 +81,7 @@ def train(args) -> None:
     # Train
     for step, data in enumerate(tqdm(train_dataloader)):
 
-        # Get audio and captions
+        # Prepare audio and captions
         audio, captions = get_audio_and_caption(data)
         # audio: (b, c, t_audio), captions: (b, t_text)
 
@@ -247,7 +247,7 @@ def get_audio_codec(configs: dict) -> nn.Module:
     
     if name == "DAC":
         
-        from audio_codec.dac import DAC
+        from codec.dac import DAC
 
         return DAC(
             sr=configs["sample_rate"],
@@ -256,7 +256,7 @@ def get_audio_codec(configs: dict) -> nn.Module:
 
     elif name == "XCodec2":
 
-        from audio_codec.xcodec import XCodec2
+        from codec.xcodec import XCodec2
         
         return XCodec2(sr=configs["sample_rate"])
 

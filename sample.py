@@ -1,6 +1,3 @@
-"""
-Modified from https://github.com/karpathy/nanoGPT/blob/master/sample.py
-"""
 from __future__ import annotations
 
 import argparse
@@ -24,10 +21,10 @@ def sample(args):
 
     start_char = "\n"
     # num_samples = 5  # Number of samples to draw
-    num_samples = 1  # Number of samples to draw
+    num_samples = 2  # Number of samples to draw
     # max_new_ids = 2048  # Number of tokens generated in each sample
     # max_new_ids = 1400
-    max_new_ids = 600
+    max_new_ids = configs["llm"]["block_size"] - configs["max_caption_len"]
     temperature = 1.0  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
     top_k = 200  # Retain only the top_k most likely tokens, clamp others to have 0 probability
     
@@ -55,11 +52,12 @@ def sample(args):
     # captions = ["Giltspur Street, and the Poultry, or about four hundred and seventy-six in all."] 
     # captions = ["The proposal made was to purchase some fifty thousand square feet between Newgate, Warwick Lane, and the Sessions House"]
     # captions = ["All the latest news, opinions and analysis on Hong Kong, China, Asia and around the world."]
+    captions = ["A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy."]
 
-    captions = []
-    for i in range(10):
-        caption = "speaker: {}, label: {}".format("jackson", i)
-        captions.append(caption)
+    # captions = []
+    # for i in range(10):
+    #     caption = "speaker: {}, label: {}".format("nicolas", i)
+    #     captions.append(caption)
 
     captions_list = [[caption] for caption in captions]
 
@@ -93,15 +91,14 @@ def sample(args):
 
             audio_codes = tokenizer.ids_to_audio_codes(ids)
 
-            audio = audio_codec.decode(audio_codes)
+            audio = codec.decode(audio_codes)
             audio = audio.cpu().numpy()[0, 0]
-
 
             # print(n)
             for b in range(B):
                 results_dir = Path("results", Path(config_path).stem)
                 results_dir.mkdir(parents=True, exist_ok=True)
-                audios_path = Path(results_dir, "{}_{}.wav".format(n, captions[0]))
+                audios_path = Path(results_dir, "{}_sample_{}.wav".format(captions[0], n))
                 soundfile.write(file=audios_path, data=audio, samplerate=sr)
                 print("Write out to {}".format(audios_path))
 

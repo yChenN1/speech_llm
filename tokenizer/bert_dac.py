@@ -120,6 +120,22 @@ class BertDacTokenizer:
         return batch_ids
 
     def ids_to_audio_codes(self, ids: torch.LongTensor) -> torch.LongTensor:
+        r"""Convert IDs to aduio tokens, then to audio codes.
+
+        E.g.,
+            IDs: [[30522, 31092, 32326, 31092, 32326, 31092, 32352, 30523]]
+
+         -> tokens: [["<boa>", "dac_l0_568", "dac_l1_778", "dac_l0_568", 
+                      "dac_l1_778", "dac_l0_568", "dac_l1_804", "<eoa>"]]
+
+         -> audio_codes: [[[568, 568, 568], [778, 778, 804]]]
+
+        Args:
+            codes: (b, t*q)
+
+        Outputs:
+            batch_ids: (b, q, t)
+        """
 
         device = ids.device
         B, T = ids.shape
@@ -152,9 +168,11 @@ class BertDacTokenizer:
                             codes.append(buffer)
                             buffer = []
 
+            codes = torch.LongTensor(codes)
+            codes = rearrange(codes, 't q -> q t')  # shape: (q, t)
             batch_codes.append(codes)
 
-        batch_codes = torch.LongTensor(batch_codes).to(device)  # shape: (b, t, q)
+        batch_codes = torch.stack(batch_codes, dim=0).to(device)  # shape: (b, q, t)
 
         return batch_codes
 

@@ -26,20 +26,13 @@ bash env.sh
 To train TTS system, download LJSpeech dataset containing 24 hours of speech from a single speaker.
 
 ```bash
-wget -O LJSpeech-1.1.tar.bz2 https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2
-mkdir -p ./datasets
-tar -xvf LJSpeech-1.1.tar.bz2 -C ./datasets/
-wget -O ./datasets/LJSpeech-1.1/train.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/train.txt?download=true
-wget -O ./datasets/LJSpeech-1.1/valid.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/valid.txt?download=true
-wget -O ./datasets/LJSpeech-1.1/test.txt https://huggingface.co/datasets/flexthink/ljspeech/resolve/main/test.txt?download=true
+bash ./scripts/download_ljspeech.sh
 ```
 
 To train music generation system, download GTZAN music dataset containing 8 hours of music with 10 genres.
 
 ```bash
-wget -O genres.tar.gz https://huggingface.co/datasets/marsyas/gtzan/resolve/main/data/genres.tar.gz?download=true
-mkdir -p ./datasets/gtzan
-tar -zxvf genres.tar.gz -C ./datasets/gtzan/
+bash ./scripts/download_gtzan.sh
 ```
 
 ## 1. Train
@@ -48,53 +41,53 @@ tar -zxvf genres.tar.gz -C ./datasets/gtzan/
 CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/ljspeech.yaml"
 ```
 
+```python
+CUDA_VISIBLE_DEVICES=0 python train.py --config="./configs/gtzan.yaml"
+```
 
+The training takes around 10 hours to train for 100,000 steps on a single RTX4090 GPU.
 
-
-
-
-The training takes around 10 hours to train for 100,000 steps on a single RTX4090 card. 
-
-![Training & Validation Loss](assets/loss.png)
+![Training & Validation Loss](assets/result_loss.png)
 
 ### Train on Multiple GPUs.
 
 We use Huggingface accelerate library to train the systems on multiple GPUs. train_accelerate.py just adds a few lines to train.py. Here is an example to run with 4 GPUs:
 
 ```python
-CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --multi_gpu --num_processes 4 train_accelerate.py --model_name=Llama
+CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --multi_gpu --num_processes 4 train_accelerate.py --config="./configs/ljspeech.yaml"
 ```
 
 Then, the training can speed up by 4x times. The code can also train with multiple nodes such as 32 GPUs with 4 nodes.
 
 ## 2. Sample
 
+Users can sample audio from text prompts using trained checkpoints:
+
 ```python
-CUDA_VISIBLE_DEVICES=0 python sample.py --model_name=Llama --ckpt_path="checkpoints/train/Llama/step=10000.pth"
+CUDA_VISIBLE_DEVICES=0 python sample.py \
+	--config="./configs/ljspeech.yaml" \
+	--ckpt_path="./checkpoints/train/ljspeech/step=100000.pth"
 ```
 
-The sampled texts look like:
+```python
+CUDA_VISIBLE_DEVICES=0 python sample.py \
+	--config="./configs/gtzan.yaml" \
+	--ckpt_path="./checkpoints/train/gtzan/step=100000.pth"
+```
 
-<pre>
-We may! though a bald prove. We three, I say! What                    
-must I see so, most heart?
+The sampled audio sounds like:
 
-Servant:
-He hath ribbons of an the city, which he main for her
-voices of the same winder. What say you to yours?
 
-Provost:
-It was commanded so willingly I do at ever.
-So fortune
-</pre>
+| Task       | Dataset         | Text prompt | Duration (hours) | Size (GB) | Notes (millions) |
+|------------|-----------------|------------------|-----------|------------------|
+| TTS        | LJSpeech (24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_0 | [sample1.wav]("./assets/ljspeech/A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy._sample_0")            19.4 |      11.8 |             0.64 |
+| Music Gen  | GTZAN (8 h)     |            161.3 |      97.7 |             5.73 |
+
+
 
 ## External links
 
-This repo is benefited from the following repos.
-
-NanoGPT: https://github.com/karpathy/nanoGPT
-
-Lit-Llama: https://github.com/Lightning-AI/lit-llama
+The Llama model code is from: https://github.com/qiuqiangkong/mini_llm
 
 ## License
 
