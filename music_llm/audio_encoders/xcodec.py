@@ -1,9 +1,7 @@
-from torch import Tensor, LongTensor
 import torch
 import torch.nn as nn
 from einops import rearrange
-import dac
-
+from torch import LongTensor, Tensor
 from xcodec2.modeling_xcodec2 import XCodec2Model
 
 
@@ -59,6 +57,11 @@ class XCodec2(nn.Module):
     ) -> Tensor:
         r"""
 
+        b: batch_size
+        c: audio_channels
+        l: audio_samples
+        t: time_steps
+
         Args:
             codes: (b, t, 1)
             model: nn.Module
@@ -76,9 +79,9 @@ class XCodec2(nn.Module):
 
             self.codec.eval()
             for b in range(B):
-                audio = self.codec.decode_code(codes[b : b + 1, None, :])  # shape: (1, 1, t)
+                audio = self.codec.decode_code(codes[b : b + 1, None, :])  # (1, 1, t)
                 audios.append(audio)
 
-            audios = torch.cat(audios, dim=0)  # shape: (b, c, t)
+            audios = torch.cat(audios, dim=0)  # (b, c, l)
             
         return audios

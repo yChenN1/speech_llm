@@ -123,17 +123,15 @@ class BertDacTokenizer:
 
         E.g.,
             IDs: [[30522, 31092, 32326, 31092, 32326, 31092, 32352, 30523]]
-
          -> tokens: [["<boa>", "dac_l0_568", "dac_l1_778", "dac_l0_568", 
                       "dac_l1_778", "dac_l0_568", "dac_l1_804", "<eoa>"]]
-
          -> audio_codes: [[[568, 568, 568], [778, 778, 804]]]
 
         Args:
             codes: (b, t*q)
 
         Outputs:
-            batch_ids: (b, q, t)
+            batch_ids: (b, t, q)
         """
 
         device = ids.device
@@ -152,29 +150,28 @@ class BertDacTokenizer:
                 token = tokens[t]
                 match = re.match(r'dac_l(\d+)_(\d+)', token)
 
-                if match:
+                if not match:
+                    continue
 
-                    q = int(match.groups()[0])
-                    id = int(match.groups()[1])
+                q = int(match.groups()[0])
+                id = int(match.groups()[1])
 
-                    if q == 0:
+                if q == 0:
+                    buffer = []
+
+                buffer.append(id)
+
+                if q == self.n_quantizers - 1:
+                    if len(buffer) == self.n_quantizers:
+                        codes.append(buffer)
                         buffer = []
 
-                    buffer.append(id)
-
-                    if q == self.n_quantizers - 1:
-                        if len(buffer) == self.n_quantizers:
-                            codes.append(buffer)
-                            buffer = []
-
             codes = LongTensor(codes)
-            codes = rearrange(codes, 't q -> q t')  # shape: (q, t)
             batch_codes.append(codes)
 
-        batch_codes = torch.stack(batch_codes, dim=0).to(device)  # shape: (b, q, t)
+        batch_codes = torch.stack(batch_codes, dim=0).to(device)  # shape: (b, t, q)
 
         return batch_codes
-
 
     def __len__(self):
         return len(self.tok)

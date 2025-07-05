@@ -8,16 +8,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch import LongTensor
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data._utils.collate import default_collate
 from tqdm import tqdm
-from typing import Literal
 
 import wandb
 from music_llm.losses import ce_loss
 from music_llm.samplers.infinite_sampler import InfiniteSampler
-from music_llm.utils import parse_yaml, LinearWarmUp
-from music_llm.losses import ce_loss
+from music_llm.utils import LinearWarmUp, parse_yaml
 
 
 def train(args) -> None:
@@ -177,9 +175,10 @@ def get_dataset(
 
         if name == "LJSpeech":
 
-            from music_llm.datasets.ljspeech import LJSpeech
             from audidata.io.crops import StartCrop
             from audidata.transforms.audio import Mono, Normalize, TimeShift
+
+            from music_llm.datasets.ljspeech import LJSpeech
 
             dataset = LJSpeech(
                 root=configs[ds][name]["root"],
@@ -192,9 +191,10 @@ def get_dataset(
             
         elif name == "GTZAN":
 
-            from music_llm.datasets.gtzan import GTZAN
             from audidata.io.crops import RandomCrop
             from audidata.transforms.audio import Mono
+
+            from music_llm.datasets.gtzan import GTZAN
 
             dataset = GTZAN(
                 root=configs[ds][name]["root"],
@@ -210,15 +210,17 @@ def get_dataset(
         elif name == "Shutterstock":
 
             from audidata.datasets import Shutterstock
+            from audidata.io.crops import RandomCrop
+            from audidata.transforms.audio import Mono
 
             dataset = Shutterstock(
-                root=configs[datasets_split][name]["root"],
+                root=configs[ds][name]["root"],
                 sr=sr,
                 crop=RandomCrop(clip_duration=clip_duration),
                 transform=Mono(),
                 target_transform=None
             )
-            datasets.append(dataset)
+            return dataset
 
         else:
             raise ValueError(name)
@@ -273,7 +275,7 @@ def get_model(configs: dict, vocab_size: int, ckpt_path: str) -> nn.Module:
     name = configs["model"]["name"]
 
     if name == "Llama":
-        from music_llm.models.llama import LlamaConfig, Llama
+        from music_llm.models.llama import Llama, LlamaConfig
         config = LlamaConfig(
             block_size=configs["model"]["block_size"],
             vocab_size=vocab_size,
@@ -287,7 +289,7 @@ def get_model(configs: dict, vocab_size: int, ckpt_path: str) -> nn.Module:
 
     if ckpt_path:
         ckpt = torch.load(ckpt_path)
-        model.load_state_dict(ckpt["audio_encoder"])
+        model.load_state_dict(ckpt)
 
     return model
 
@@ -395,14 +397,15 @@ def validate(
         target_ids = ids[:, 1 :]
         mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
 
-        # Forward
+        # ------ 2. Evaluation ------
+        # 2.1 Forward
         with torch.no_grad():
             model.eval()
             logits = model(ids)  # shape: (b, l, v)
 
         out = logits[:, 0 : -1, :]
 
-        # 2.3 Loss
+        # 2.2 Loss
         loss = ce_loss(
             output=out, 
             target=target_ids, 

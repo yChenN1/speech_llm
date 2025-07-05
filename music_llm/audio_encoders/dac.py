@@ -3,8 +3,8 @@ from __future__ import annotations
 import dac
 import torch
 import torch.nn as nn
-from torch import LongTensor, Tensor
 from einops import rearrange
+from torch import LongTensor, Tensor
 
 
 class DAC(nn.Module):

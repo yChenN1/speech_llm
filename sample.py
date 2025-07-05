@@ -6,8 +6,8 @@ from pathlib import Path
 import soundfile
 import torch
 
-from train import get_audio_codec, get_llm, get_tokenizer
-from utils import parse_yaml
+from train import get_audio_encoder, get_model, get_tokenizer
+from music_llm.utils import parse_yaml
 
 
 def sample(args):
@@ -20,26 +20,26 @@ def sample(args):
     configs = parse_yaml(config_path)
 
     num_samples = 2  # Number of samples to draw
-    max_new_ids = configs["llm"]["block_size"]  # Number of IDs generated
+    max_new_ids = configs["model"]["block_size"]  # Number of IDs generated
     temperature = 1.0  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
     top_k = 200  # Retain only the top_k most likely tokens, clamp others to have 0 probability
     
     device = "cuda"
     sr = configs["sample_rate"]
 
-    # Audio encoder: Used to convert to convert audio into discrete codes
-    codec = get_audio_codec(configs)
-    codec.to(device)
+    # Audio encoder
+    audio_encoder = get_audio_encoder(configs).to(device)
 
-    # Tokenizer: Used to convert text/audio codes into IDs and vice versa
-    tokenizer = get_tokenizer(configs, codec)
-    vocab_size = len(tokenizer)
+    # Tokenizer
+    tokenizer = get_tokenizer(configs, audio_encoder)
 
-    # LLM decoder
-    llm = get_llm(configs, vocab_size)
-    llm.load_state_dict(torch.load(ckpt_path))
-    llm.to(device)
-
+    # Model
+    model = get_model(
+        configs=configs, 
+        vocab_size=len(tokenizer), 
+        ckpt_path=ckpt_path
+    ).to(device)
+    
     # Users can change the captions here
     captions = sample_captions(configs)
 
@@ -51,7 +51,7 @@ def sample(args):
         caption_ids = tokenizer.captions_to_ids(
             captions=batch_caption, 
             fix_length=configs["max_caption_len"]
-        ).to(device)  # shape: (b, t_text)
+        ).to(device)  # (b, l_text)
 
         # Begin of audio ID
         B = caption_ids.shape[0]
@@ -64,15 +64,16 @@ def sample(args):
         for n in range(num_samples):
 
             with torch.no_grad():
-                llm.eval()
-                ids = llm.generate(
+                model.eval()
+                ids = model.generate(
                     ids=input_ids, 
                     max_new_ids=max_new_ids, 
                     temperature=temperature, 
                     top_k=top_k
-                )  # shape: (b, t)
+                )  # (b, l)
 
-            audio_codes = tokenizer.ids_to_audio_codes(ids)  # shape: (b, q, t)
+            from IPython import embed; embed(using=False); os._exit(0)
+            audio_codes = tokenizer.ids_to_audio_codes(ids)  # (b, q, t)
 
             audio = codec.decode(audio_codes)  # shape: (b, c, t)
             audio = audio.cpu().numpy()[0]  # shape: (c, t)

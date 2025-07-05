@@ -1,10 +1,10 @@
-import torch.nn as nn
-import torch
-from torch import LongTensor
-import numpy as np
 import re
+
+import numpy as np
 from einops import rearrange
+from torch import LongTensor
 from transformers import AutoTokenizer
+
 from music_llm.utils import pad_or_truncate
 
 
@@ -108,10 +108,11 @@ class BertXCodecTokenizer:
                 token = tokens[t]
                 match = re.match(r'xcodec_(\d+)', token)
 
-                if match:
+                if not match:
+                    continue
 
-                    id = int(match.groups()[0])
-                    codes.append(id)
+                id = int(match.groups()[0])
+                codes.append(id)
 
             batch_codes.append(codes)
 
