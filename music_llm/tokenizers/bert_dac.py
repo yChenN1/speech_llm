@@ -4,34 +4,36 @@ import re
 
 import numpy as np
 import torch
-import torch.nn as nn
 from einops import rearrange
+from torch import LongTensor
 from transformers import AutoTokenizer
 
-from utils import pad_or_truncate
+from music_llm.utils import pad_or_truncate
 
 
 class BertDacTokenizer:
     r"""Extend text tokenizer with discrete audio codec vocabularies.
     """
     
-    def __init__(self, audio_codec: nn.Module) -> None:
+    def __init__(
+        self, 
+        codecbook_size: int,  # E.g., 1024
+        n_quantizers: int  # E.g., 2
+    ) -> None:
 
         super().__init__()
 
+        self.codebook_size = codecbook_size
+        self.n_quantizers = n_quantizers
+
         self.tok = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-        # Audio encoder attributes
-        self.codebook_size = audio_codec.codec.codebook_size  # E.g., 1024
-        self.n_quantizers = audio_codec.n_quantizers  # E.g., 2
-
-        # Begin of audio (boa) and end of audio (eoa) tokens
-        new_vocabs = ["<boa>", "<eoa>"]
+        new_vocabs = ["<boa>", "<eoa>"]  # <boa>: begin of audio; <eoa>: end of audio
 
         # Audio codec vocabs
         for q in range(self.n_quantizers):
             for i in range(self.codebook_size):
-                new_vocabs.append("dac_l{}_{}".format(q, i))
+                new_vocabs.append("dac_q{}_{}".format(q, i))
 
         # Merge text tokens and audio tokens
         print("Original vocab size: {}".format(len(self.tok)))
@@ -43,7 +45,7 @@ class BertDacTokenizer:
         self,
         captions: list[str], 
         fix_length: int
-    ) -> torch.LongTensor:
+    ) -> LongTensor:
         r"""Convert captions to IDs. 
 
         E.g., ["Hello world", "rock"]
@@ -54,7 +56,7 @@ class BertDacTokenizer:
             fix_length: int
 
         Returns:
-            batch_ids: (b, t)
+            batch_ids: (b, l)
         """
 
         batch_ids = []
@@ -64,10 +66,8 @@ class BertDacTokenizer:
             # Convert texts to tokens
             tokens = self.tok.tokenize(caption)
 
-            # Convert tokens to IDs. Reserve 2 IDs for special IDs
+            # Convert tokens into IDs, reserving space for two special IDs
             ids = self.tok.convert_tokens_to_ids(tokens)[0 : fix_length - 2]
-
-            # Append special IDs
             ids = [self.tok.cls_token_id] + ids + [self.tok.sep_token_id]
 
             # Pad
@@ -76,50 +76,49 @@ class BertDacTokenizer:
 
             batch_ids.append(ids)
 
-        return torch.LongTensor(batch_ids)
+        return LongTensor(batch_ids)
 
-    def audio_codes_to_ids(self, codes: torch.LongTensor) -> torch.LongTensor:
+    
+    def audio_codes_to_ids(self, codes: LongTensor) -> LongTensor:
         r"""Convert audio codes to tokens, then to IDs.
 
         E.g.,
             audio_codes: [[[568, 568, 568], [778, 778, 804]]] 
-
          -> tokens: [["<boa>", "dac_l0_568", "dac_l1_778", "dac_l0_568", 
                       "dac_l1_778", "dac_l0_568", "dac_l1_804", "<eoa>"]]
-
          -> IDs: [[30522, 31092, 32326, 31092, 32326, 31092, 32352, 30523]]
 
         Args:
-            codes: (b, q, t)
+            codes: (b, t, q)
 
         Outputs:
             batch_ids: (b, t*q)
         """
 
         device = codes.device
-        B, Q, T = codes.shape
+        B, T, Q = codes.shape
 
         codes = codes.cpu().numpy()
         batch_ids = np.zeros_like(codes, dtype="int64")
 
         for b in range(B):
-            for q in range(Q):
-                for t in range(T):
-                    token = "dac_l{}_{}".format(q, codes[b, q, t])
-                    batch_ids[b, q, t] = self.tok.convert_tokens_to_ids(token)
+            for t in range(T):
+                for q in range(Q):
+                    token = "dac_q{}_{}".format(q, codes[b, t, q])
+                    batch_ids[b, t, q] = self.tok.convert_tokens_to_ids(token)
 
-        batch_ids = rearrange(batch_ids, 'b q t -> b (t q)')
+        batch_ids = rearrange(batch_ids, 'b t q -> b (t q)')
 
         # Special tokens
         boa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<boa>")
         eoa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<eoa>")
 
-        batch_ids = np.concatenate((boa_ids, batch_ids, eoa_ids), axis=-1)  # shape: (b, t)
-        batch_ids = torch.LongTensor(batch_ids).to(device)
+        batch_ids = np.concatenate((boa_ids, batch_ids, eoa_ids), axis=-1)  # (b, t)
+        batch_ids = LongTensor(batch_ids).to(device)
 
         return batch_ids
 
-    def ids_to_audio_codes(self, ids: torch.LongTensor) -> torch.LongTensor:
+    def ids_to_audio_codes(self, ids: LongTensor) -> LongTensor:
         r"""Convert IDs to aduio tokens, then to audio codes.
 
         E.g.,
@@ -168,7 +167,7 @@ class BertDacTokenizer:
                             codes.append(buffer)
                             buffer = []
 
-            codes = torch.LongTensor(codes)
+            codes = LongTensor(codes)
             codes = rearrange(codes, 't q -> q t')  # shape: (q, t)
             batch_codes.append(codes)
 

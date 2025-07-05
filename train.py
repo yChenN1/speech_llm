@@ -6,18 +6,18 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from audidata.io.crops import RandomCrop, StartCrop
-from audidata.transforms import Mono, Normalize, TimeShift
-from torch.utils.data import DataLoader, Dataset
+from torch import LongTensor
+from torch.utils.data import DataLoader
+from torch.utils.data._utils.collate import default_collate
 from tqdm import tqdm
-from typing_extensions import Literal
+from typing import Literal
 
 import wandb
-from data.samplers import InfiniteSampler
-from llm.llama import Llama, LlamaConfig
-from utils import LinearWarmUp, parse_yaml
+from music_llm.losses import ce_loss
+from music_llm.samplers.infinite_sampler import InfiniteSampler
+from music_llm.utils import parse_yaml, LinearWarmUp
+from music_llm.losses import ce_loss
 
 
 def train(args) -> None:
@@ -30,11 +30,6 @@ def train(args) -> None:
     # Configs
     configs = parse_yaml(config_path)
     device = configs["train"]["device"]
-    batch_size = configs["train"]["batch_size_per_device"]
-    num_workers = configs["train"]["num_workers"]
-    test_every_n_steps = configs["train"]["test_every_n_steps"]
-    save_every_n_steps = configs["train"]["save_every_n_steps"]
-    training_steps = configs["train"]["training_steps"]
 
     # Checkpoints directory
     config_name = Path(config_path).stem
@@ -51,99 +46,102 @@ def train(args) -> None:
     # Dataloader
     train_dataloader = DataLoader(
         dataset=train_dataset, 
-        batch_size=batch_size, 
+        batch_size=configs["train"]["batch_size_per_device"], 
         sampler=train_sampler,
-        num_workers=num_workers, 
+        num_workers=configs["train"]["num_workers"], 
         pin_memory=True
     )
 
-    # Audio encoder: Used to convert audio into discrete codes
-    codec = get_audio_codec(configs)
-    codec.to(device)
+    # Audio encoder
+    audio_encoder = get_audio_encoder(configs).to(device)
 
-    # Tokenizer: Used to convert text or audio codes into IDs and vice versa
-    tokenizer = get_tokenizer(configs, codec)
-    vocab_size = len(tokenizer)
+    # Tokenizer
+    tokenizer = get_tokenizer(configs, audio_encoder)
 
-    # LLM decoder
-    llm = get_llm(configs, vocab_size)
-    llm.to(device)
+    # Model
+    model = get_model(
+        configs=configs, 
+        vocab_size=len(tokenizer), 
+        ckpt_path=configs["train"]["resume_ckpt_path"]
+    ).to(device)
 
     # Optimizer
     optimizer, scheduler = get_optimizer_and_scheduler(
         configs=configs, 
-        params=llm.parameters()
+        params=model.parameters()
     )
 
     if wandb_log:
-        wandb.init(project="music_llm", name="{}".format(config_name))
+        wandb.init(project="music_llm", name=config_name)
 
     # Train
     for step, data in enumerate(tqdm(train_dataloader)):
 
-        # Prepare audio and captions
-        audio, captions = get_audio_and_caption(data)
-        # audio: (b, c, t_audio), captions: (b, t_text)
+        # ------ 1. Data preparation ------
+        # 1.1 Prepare audio and captions
+        audio, captions = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
 
-        # Tokenize captions to IDs
+        # 1.2 Tokenize captions to IDs
         caption_ids = tokenizer.captions_to_ids(
             captions=captions, 
             fix_length=configs["max_caption_len"]
-        ).to(device)  # shape: (b, t_text)
+        ).to(device)  # (b, l_text)
         
-        # Encode audio into discrete codes
+        # 1.3 Encode audio into discrete codes
         audio = audio.to(device)
-        audio_codes = codec.encode(audio=audio)  # shape: (b, t_code, q)
+        audio_codes = audio_encoder.encode(audio=audio)  # (b, l_code, q)
 
-        # Tokenize audio codes to IDs
-        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # shape: (b, t_text)
+        # 1.4 Tokenize audio codes to IDs
+        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # (b, l_text)
 
-        # Concatenate text and audio IDs along time axis
-        ids = torch.cat((caption_ids, audio_ids), dim=1)  # shape: (b, t)
-        input_ids = ids[:, 0 : -1]  # (b, t)
-        target_ids = ids[:, 1 :]  # (b, t)
+        # 1.5 Concatenate text and audio IDs
+        ids = torch.cat((caption_ids, audio_ids), dim=1)  # (b, l)
 
-        # Loss mask
-        loss_mask = get_loss_mask(caption_ids, audio_ids)  # shape: (b, t)
+        # ------ 2. Training ------
+        # 2.1 Forward
+        model.train()
+        logits = model(ids)  # shape: (b, l, v)
 
-        # Forward
-        llm.train()
-        logits = llm(ids=input_ids)  # shape: (b, t, v)
+        # 2.2 Targets        
+        out = logits[:, 0 : -1, :]
+        target_ids = ids[:, 1 :]
+        mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
 
-        # Loss
+        # 2.3 Loss
         loss = ce_loss(
-            output=logits, 
+            output=out, 
             target=target_ids, 
-            mask=loss_mask, 
+            mask=mask, 
             ignore_index=tokenizer.pad_token_id
         )
         
-        # Optimize
+        # 2.4 Optimize
         optimizer.zero_grad()  # Reset all parameter.grad to 0
         loss.backward()  # Update all parameter.grad
         optimizer.step()  # Update all parameters based on all parameter.grad
 
-        # Learning rate scheduler
+        # 2.5 Learning rate scheduler
         if scheduler:
             scheduler.step()
 
-        # Evaluate
-        if step % test_every_n_steps == 0:
+        # ------ 3. Evaluation ------
+        # 3.1 Evaluate
+        if step % configs["train"]["test_every_n_steps"] == 0:
 
             train_loss = validate(
                 configs=configs,
                 dataset=train_dataset, 
                 tokenizer=tokenizer, 
-                codec=codec, 
-                llm=llm
+                audio_encoder=audio_encoder, 
+                model=model
             )
 
             test_loss = validate(
                 configs=configs,
                 dataset=test_dataset, 
                 tokenizer=tokenizer, 
-                codec=codec, 
-                llm=llm
+                audio_encoder=audio_encoder, 
+                model=model
             )
 
             if wandb_log:
@@ -152,16 +150,16 @@ def train(args) -> None:
                     step=step
                 )
 
-            print("Train loss: {}".format(train_loss))
-            print("Test loss: {}".format(test_loss))
+            print("Train loss: {:.2f}".format(train_loss))
+            print("Test loss: {:.2f}".format(test_loss))
 
-        # Save model
-        if step % save_every_n_steps == 0:
-            ckpt_path = Path(ckpts_dir, "step={}.pth".format(step))
-            torch.save(llm.state_dict(), ckpt_path)
-            print("Save model to {}".format(ckpt_path))
+        # 3.2 Save model
+        if step % configs["train"]["save_every_n_steps"] == 0:
+            ckpt_path = Path(ckpts_dir, f"step={step}.pth")
+            torch.save(model.state_dict(), ckpt_path)
+            print(f"Save model to {ckpt_path}")
 
-        if step == training_steps:
+        if step == configs["train"]["training_steps"]:
             break
 
         
@@ -173,52 +171,41 @@ def get_dataset(
 
     sr = configs["sample_rate"]
     clip_duration = configs["clip_duration"]
+    ds = f"{split}_datasets"
 
-    datasets = []
-    datasets_split = "{}_datasets".format(split)
+    for name in configs[ds].keys():
 
-    for name in configs[datasets_split].keys():
-    
-        if name == "FreeSpokenDigit":
+        if name == "LJSpeech":
 
-            from audidata.datasets import FreeSpokenDigit
-
-            dataset = FreeSpokenDigit(
-                root=configs[datasets_split][name]["root"],
-                split=split,
-                sr=sr,
-                crop=StartCrop(clip_duration=clip_duration),
-                transform=[Mono(), Normalize(), TimeShift(sr=sr, shift=(0., 0.5))],
-            )
-            datasets.append(dataset)
-
-        elif name == "LJSpeech":
-
-            from audidata.datasets import LJSpeech
+            from music_llm.datasets.ljspeech import LJSpeech
+            from audidata.io.crops import StartCrop
+            from audidata.transforms.audio import Mono, Normalize, TimeShift
 
             dataset = LJSpeech(
-                root=configs[datasets_split][name]["root"],
-                split=configs[datasets_split][name]["split"],
+                root=configs[ds][name]["root"],
+                split=configs[ds][name]["split"],
                 sr=sr,
                 crop=StartCrop(clip_duration=clip_duration), 
                 transform=[Mono(), Normalize(), TimeShift(sr=sr, shift=(0., 0.5))],
             )
-            datasets.append(dataset)
-
+            return dataset
+            
         elif name == "GTZAN":
 
-            from audidata.datasets import GTZAN
+            from music_llm.datasets.gtzan import GTZAN
+            from audidata.io.crops import RandomCrop
+            from audidata.transforms.audio import Mono
 
             dataset = GTZAN(
-                root=configs[datasets_split][name]["root"],
-                split=configs[datasets_split][name]["split"],
-                test_fold=configs[datasets_split][name]["test_fold"],
+                root=configs[ds][name]["root"],
+                split=configs[ds][name]["split"],
+                test_fold=configs[ds][name]["test_fold"],
                 sr=sr,
                 crop=RandomCrop(clip_duration=clip_duration),
                 transform=Mono(),
                 target_transform=None
             )
-            datasets.append(dataset)
+            return dataset
 
         elif name == "Shutterstock":
 
@@ -240,74 +227,69 @@ def get_dataset(
         return dataset
 
 
-def get_audio_codec(configs: dict) -> nn.Module:
+def get_audio_encoder(configs: dict) -> nn.Module:
     r"""Load pretrained audio encoder."""
 
-    name = configs["audio_codec"]["name"]
+    name = configs["audio_encoder"]["name"]
     
-    if name == "DAC":
-        
-        from codec.dac import DAC
-
+    if name == "DAC":        
+        from music_llm.audio_encoders.dac import DAC
         return DAC(
             sr=configs["sample_rate"],
-            n_quantizers=configs["audio_codec"]["n_quantizers"]
+            n_quantizers=configs["audio_encoder"]["n_quantizers"]
         )
 
     elif name == "XCodec2":
-
-        from codec.xcodec import XCodec2
-        
+        from music_llm.audio_encoders.xcodec import XCodec2
         return XCodec2(sr=configs["sample_rate"])
 
     else:
         raise ValueError(name)
 
 
-def get_tokenizer(configs: dict, codec: nn.Module) -> object:
+def get_tokenizer(configs: dict, audio_encoder: nn.Module) -> object:
     r"""Get tokenizer with merged text and audio tokens."""
 
     name = configs["tokenizer"]["name"]
 
     if name == "BertDAC":
-
-        from tokenizer.bert_dac import BertDacTokenizer
-
-        return BertDacTokenizer(codec)
-
-    elif name == "BertXCodec2":
-
-        from tokenizer.bert_xcodec import BertXCodecTokenizer
+        from music_llm.tokenizers.bert_dac import BertDacTokenizer
+        return BertDacTokenizer(
+            codecbook_size=audio_encoder.codec.codebook_size, 
+            n_quantizers=audio_encoder.n_quantizers
+        )
         
-        return BertXCodecTokenizer(codec)
+    elif name == "BertXCodec2":
+        from music_llm.tokenizers.bert_xcodec import BertXCodecTokenizer
+        return BertXCodecTokenizer(audio_encoder.vocab_size)
 
     else:
         raise ValueError(name)
 
 
-def get_llm(configs: dict, vocab_size: int) -> nn.Module:
+def get_model(configs: dict, vocab_size: int, ckpt_path: str) -> nn.Module:
     r"""Initialize LLM decoder."""
 
-    name = configs["llm"]["name"]
+    name = configs["model"]["name"]
 
     if name == "Llama":
-
-        block_size = configs["llm"]["block_size"]
-        n_layer = configs["llm"]["n_layer"]
-        n_head = configs["llm"]["n_head"]
-        n_embd = configs["llm"]["n_embd"]
-
+        from music_llm.models.llama import LlamaConfig, Llama
         config = LlamaConfig(
-            block_size=block_size,
+            block_size=configs["model"]["block_size"],
             vocab_size=vocab_size,
-            n_layer=n_layer,
-            n_head=n_head,
-            n_embd=n_embd
+            n_layer=configs["model"]["n_layer"],
+            n_head=configs["model"]["n_head"],
+            n_embd=configs["model"]["n_embd"],
         )
-        return Llama(config=config)
-
+        model = Llama(config)
     else:
-        raise ValueError(name)    
+        raise ValueError(name)
+
+    if ckpt_path:
+        ckpt = torch.load(ckpt_path)
+        model.load_state_dict(ckpt["audio_encoder"])
+
+    return model
 
 
 def get_optimizer_and_scheduler(
@@ -351,129 +333,82 @@ def get_audio_and_caption(data: dict) -> tuple[torch.Tensor, list[str]]:
 
 
 def get_loss_mask(
-    caption_ids: torch.LongTensor, 
-    audio_ids: torch.LongTensor
+    caption_ids: LongTensor, 
+    audio_ids: LongTensor
 ) -> torch.Tensor:
     r"""Get loss mask to train the autoregression model.
 
     Args:
-        caption_ids: (b, t1)
-        audio_ids: (b, t2)
+        caption_ids: (b, l1)
+        audio_ids: (b, l2)
 
     Returns:
-        mask: (b, t1+t2-1)
+        mask: (b, l1+l2)
     """
 
-    device = caption_ids.device
-    B, T1 = caption_ids.shape
-    T2 = audio_ids.shape[1]
-
-    caption_mask = torch.zeros((B, T1))
-    audio_mask = torch.ones((B, T2 - 1))
-
-    mask = torch.cat((caption_mask, audio_mask), dim=1).to(device)
-
+    mask = torch.cat((torch.zeros_like(caption_ids), torch.ones_like(audio_ids)), dim=1)
     return mask
-
-
-def ce_loss(
-    output: torch.Tensor, 
-    target: torch.LongTensor, 
-    mask: torch.Tensor,
-    ignore_index: int
-) -> float:
-    r"""Cross entropy loss.
-
-    b: batch_size
-    t: time_steps
-    v: vocab_size
-
-    Args:
-        output: (b, t, v), logits
-        target: (b, t)
-        mask: (b, t)
-        ignore_index: int
-
-    Outputs:
-        loss: torch.float
-    """
-
-    B, T, V = output.shape
-
-    loss = F.cross_entropy(
-        input=output.flatten(0, 1),  # shape: (b*t, v)
-        target=target.flatten(0, 1),  # shape: (b*t,)
-        ignore_index=ignore_index,
-        reduction="none"
-    )  # shape: (b*t,)
-
-    loss = loss * mask.flatten(0, 1)  # shape: (b*t,)
-    loss = torch.mean(loss)
-
-    return loss
 
 
 def validate(
     configs: dict,
     dataset: Dataset,
     tokenizer: object,
-    codec: nn.Module, 
-    llm: nn.Module, 
+    audio_encoder: nn.Module, 
+    model: nn.Module, 
     valid_steps=100
 ) -> float:
     r"""Validate the model on part of data."""
 
-    device = next(codec.parameters()).device
+    device = next(audio_encoder.parameters()).device
     losses = []
 
     skip_n = max(1, len(dataset) // valid_steps)
 
     for idx in range(0, len(dataset), skip_n):
     
+        # ------ 1. Data preparation ------
+        # 1.0 Get Data
         data = dataset[idx]
-        
-        # Get audio and captions
-        audio, caption = get_audio_and_caption(data)
-        # audio: (c, t), caption: str
-        
-        # Batch data
-        audio = torch.Tensor(audio[None, :, :]).to(device)  # shape: (b, c, t_audio)
-        captions = [caption]  # shape: (b, t_text)
-        
-        # Tokenize captions to IDs
+        data = default_collate([data])
+
+        # 1.1 Prepare audio and captions
+        audio, captions = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
+
+        # 1.2 Tokenize captions to IDs
         caption_ids = tokenizer.captions_to_ids(
             captions=captions, 
             fix_length=configs["max_caption_len"]
-        ).to(device)  # shape: (b, t_text)
-
-        # Encode audio into discrete codes
+        ).to(device)  # (b, l_text)
+        
+        # 1.3 Encode audio into discrete codes
         audio = audio.to(device)
-        audio_codes = codec.encode(audio=audio)  # shape: (b, t_code, q)
-        
-        # Tokenize audio codes to IDs
-        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # shape: (b, t_text)
+        audio_codes = audio_encoder.encode(audio=audio)  # (b, l_code, q)
 
-        # Concatenate text and audio IDs along time axis
-        ids = torch.cat((caption_ids, audio_ids), dim=1)  # shape: (b, t)
-        input_ids = ids[:, 0 : -1]  # (b, t)
-        target_ids = ids[:, 1 :]  # (b, t)
+        # 1.4 Tokenize audio codes to IDs
+        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # (b, l_text)
 
-        # Loss mask
-        loss_mask = get_loss_mask(caption_ids, audio_ids)  # shape: (b, t)
-        
+        # 1.5 Concatenate text and audio IDs
+        ids = torch.cat((caption_ids, audio_ids), dim=1)  # (b, l)
+
+        # 1.6 Targets
+        target_ids = ids[:, 1 :]
+        mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
+
         # Forward
         with torch.no_grad():
-            llm.eval()
-            logits = llm(ids=input_ids)  # shape: (b, t, v)
+            model.eval()
+            logits = model(ids)  # shape: (b, l, v)
 
-        # Loss
+        out = logits[:, 0 : -1, :]
+
+        # 2.3 Loss
         loss = ce_loss(
-            output=logits, 
+            output=out, 
             target=target_ids, 
-            mask=loss_mask, 
+            mask=mask, 
             ignore_index=tokenizer.pad_token_id
         )
-
         losses.append(loss.item())
 
     return np.mean(losses)

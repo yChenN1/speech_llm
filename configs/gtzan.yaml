@@ -15,16 +15,15 @@ test_datasets:
         split: "test"
         test_fold: 0
         
-audio_codec:
+audio_encoder:
     name: DAC
     n_quantizers: 2
 
 tokenizer:
     name: BertDAC
 
-llm:
+model:
     name: Llama
-    trainable: True
     block_size: 2048  # Maximize block size
     vocab_size:  # Leave blank. Parsed later from len(tokenier)
     n_layer: 12

@@ -23,7 +23,7 @@ bash env.sh
 
 ## 0. Download datasets
 
-To train TTS system, download LJSpeech dataset containing 24 hours of speech from a single speaker.
+To train TTS system, download LJSpeech dataset (3.6 GB) containing 24 hours of speech from a single speaker.
 
 ```bash
 bash ./scripts/download_ljspeech.sh
