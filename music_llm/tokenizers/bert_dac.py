@@ -148,7 +148,7 @@ class BertDacTokenizer:
             for t in range(T):
                 
                 token = tokens[t]
-                match = re.match(r'dac_l(\d+)_(\d+)', token)
+                match = re.match(r'dac_q(\d+)_(\d+)', token)
 
                 if not match:
                     continue

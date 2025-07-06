@@ -71,20 +71,20 @@ def sample(args):
                     temperature=temperature, 
                     top_k=top_k
                 )  # (b, l)
-
-            from IPython import embed; embed(using=False); os._exit(0)
-            audio_codes = tokenizer.ids_to_audio_codes(ids)  # (b, q, t)
-
-            audio = codec.decode(audio_codes)  # shape: (b, c, t)
+            
+            audio_codes = tokenizer.ids_to_audio_codes(ids)  # (b, t, q)
+            audio = audio_encoder.decode(audio_codes)  # shape: (b, c, l)
             audio = audio.cpu().numpy()[0]  # shape: (c, t)
 
             # print(n)
             for b in range(B):
                 results_dir = Path("./results", Path(config_path).stem)
                 results_dir.mkdir(parents=True, exist_ok=True)
-                audios_path = Path(results_dir, "{}_sample_{}.wav".format(captions[0], n))
+                audios_path = Path(results_dir, "{}_sample_{}.wav".format(caption, n))
                 soundfile.write(file=audios_path, data=audio.T, samplerate=sr)
                 print("Write out to {}".format(audios_path))
+
+
 
 
 def sample_captions(configs: dict) -> list[str]:
@@ -97,13 +97,6 @@ def sample_captions(configs: dict) -> list[str]:
 
         captions = ["blues", "classical", "country", "disco", "hiphop", "jazz", 
             "metal", "pop", "reggae", "rock"]
-
-    elif "FreeSpokenDigit" in configs["train_datasets"]:
-
-        captions = []
-        for i in range(10):
-            caption = "speaker: {}, label: {}".format("nicolas", i)
-            captions.append(caption)
 
     else:
         raise NotImplementedError

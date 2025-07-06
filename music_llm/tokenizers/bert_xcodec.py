@@ -106,12 +106,13 @@ class BertXCodecTokenizer:
             for t in range(T):
                 
                 token = tokens[t]
-                match = re.match(r'xcodec_(\d+)', token)
+                match = re.match(r'xcodec_q(\d+)_(\d+)', token)
 
                 if not match:
                     continue
 
-                id = int(match.groups()[0])
+                q = int(match.groups()[0])
+                id = int(match.groups()[1])
                 codes.append(id)
 
             batch_codes.append(codes)

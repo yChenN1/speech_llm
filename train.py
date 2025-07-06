@@ -94,7 +94,7 @@ def train(args) -> None:
 
         # 1.5 Concatenate text and audio IDs
         ids = torch.cat((caption_ids, audio_ids), dim=1)  # (b, l)
-
+        
         # ------ 2. Training ------
         # 2.1 Forward
         model.train()
