@@ -29,7 +29,7 @@ To train TTS system, download LJSpeech dataset (3.6 GB) containing 24 hours of s
 bash ./scripts/download_ljspeech.sh
 ```
 
-To train music generation system, download GTZAN music dataset containing 8 hours of music with 10 genres.
+To train music generation system, download GTZAN music dataset (1.3 GB) containing 8 hours of music with 10 genres.
 
 ```bash
 bash ./scripts/download_gtzan.sh
@@ -79,49 +79,9 @@ After training on 1 RTX4090 GPU for 100,000 stesp in 10 hours, the sampled audio
 | Task       | Training Dataset      | Text prompt                                                                                                   | Sample 1                                                                                      | Sample 2                                                                                                                                                                                                                                                                                                  |
 |------------|-----------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
 | TTS        | LJSpeech (size: 24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | <video src="https://github.com/user-attachments/assets/d0adf51d-c24e-48c4-bafa-3d6502aed1a5"> | <video src="https://github.com/user-attachments/assets/63b970bc-192d-45d5-84aa-e26313bf9d28"> |
-| Music Gen  | GTZAN (size: 8 h)     | country                                                                                                       | <video src="https://github.com/user-attachments/assets/575ef8b0-fa88-4843-a45a-9cdf3d62efa6"> | <video src="https://github.com/user-attachments/assets/f5215af1-c2db-43ad-9944-10c528711106"> |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+| Music Gen  | GTZAN (size: 8 h)     | disco                                                                                                       | <video src="https://github.com/user-attachments/assets/575ef8b0-fa88-4843-a45a-9cdf3d62efa6"> | <video src="https://github.com/user-attachments/assets/f5215af1-c2db-43ad-9944-10c528711106"> |
 
 
 ## External links
 
-The Llama model code is from: https://github.com/qiuqiangkong/mini_llm
-
-## License
-
-MIT
+[1] The Llama model code is from: https://github.com/qiuqiangkong/mini_llm
