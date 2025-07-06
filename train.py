@@ -100,7 +100,7 @@ def train(args) -> None:
         model.train()
         logits = model(ids)  # shape: (b, l, v)
 
-        # 2.2 Targets        
+        # 2.2 Targets
         out = logits[:, 0 : -1, :]
         target_ids = ids[:, 1 :]
         mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
