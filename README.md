@@ -78,8 +78,20 @@ After training on 1 RTX4090 GPU for 100,000 stesp in 10 hours, the sampled audio
 
 | Task       | Training Dataset      | Text prompt                                                                                                   | Sample 1                                                                                      | Sample 2                                                                                                                                                                                                                                                                                                  |
 |------------|-----------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
-| TTS        | LJSpeech (size: 24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | <video src="https://github.com/user-attachments/assets/5d7421e9-9f64-48a1-92c5-6cfee04a6e8c"> | <video src="https://github.com/user-attachments/assets/3433b3b7-2b48-42a9-a138-3b8166591a85"> |
-| Music Gen  | GTZAN (size: 8 h)     | country                                                                                                       | <video src="https://github.com/user-attachments/assets/428dd426-787a-487b-9c32-197d61bfece3"> | <video src="https://github.com/user-attachments/assets/2655f774-7133-4a68-b3fc-11fd9786c79f"> |
+| TTS        | LJSpeech (size: 24 h) | A happy dog ran through the park, wagging its tail excitedly, greeting everyone with joy and boundless energy | <video src="https://github.com/user-attachments/assets/d0adf51d-c24e-48c4-bafa-3d6502aed1a5"> | <video src="https://github.com/user-attachments/assets/63b970bc-192d-45d5-84aa-e26313bf9d28"> |
+| Music Gen  | GTZAN (size: 8 h)     | country                                                                                                       | <video src="https://github.com/user-attachments/assets/575ef8b0-fa88-4843-a45a-9cdf3d62efa6"> | <video src="https://github.com/user-attachments/assets/f5215af1-c2db-43ad-9944-10c528711106"> |
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
