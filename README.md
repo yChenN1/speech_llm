@@ -51,7 +51,8 @@ CUDA_VISIBLE_DEVICES=1 python train.py --config="./configs/gtzan.yaml"
 
 The training takes around 10 hours to train for 100,000 steps on a single RTX4090 GPU.
 
-![Training & Validation Loss](assets/result_loss.png)
+<img src="https://github.com/user-attachments/assets/47a7982b-2358-4cdd-94c7-97bc18354f27" width="800">
+
 
 ### Train on Multiple GPUs.
 
