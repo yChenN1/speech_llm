@@ -73,7 +73,7 @@ def train(args) -> None:
     # Prepare for multiprocessing
     accelerator = Accelerator()
 
-    codec, llm, optimizer, train_dataloader = accelerator.prepare(
+    audio_encoder, model, optimizer, train_dataloader = accelerator.prepare(
         audio_encoder, model, optimizer, train_dataloader)
 
     if wandb_log and accelerator.is_main_process:
@@ -93,7 +93,7 @@ def train(args) -> None:
         ).to(audio.device)  # (b, l_text)
 
         # 1.3 Encode audio into discrete codes
-        audio_codes = audio_encoder.encode(audio=audio)  # (b, l_code, q)
+        audio_codes = audio_encoder.module.encode(audio=audio)  # (b, l_code, q)
 
         # 1.4 Tokenize audio codes to IDs
         audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # (b, l_text)
