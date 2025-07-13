@@ -74,7 +74,7 @@ CUDA_VISIBLE_DEVICES=0 python sample.py \
 	--ckpt_path="./checkpoints/train/ljspeech/step=100000.pth"
 ```
 
-After training on 1 RTX4090 GPU for 100,000 stesp in 10 hours, the sampled audio sounds like:
+When using the first two layers of the DAC codec for training, after 100,000 steps on a single RTX 4090 GPU over 10 hours, the sampled audio sounds like:
 
 
 | Task       | Training Dataset      | Text prompt                                                                                                   | Sample 1                                                                                      | Sample 2                                                                                                                                                                                                                                                                                                  |
