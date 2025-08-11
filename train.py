@@ -222,6 +222,17 @@ def get_dataset(
             )
             return dataset
 
+        elif name == 'InstructSpeech':
+            from datasets import load_dataset
+            dataset = InstructSpeech(
+                root=configs[ds][name]["root"],
+                split=configs[ds][name]["split"],
+                sr=sr,
+                crop=RandomCrop(clip_duration=clip_duration),
+                transform=Mono(),
+                target_transform=None
+            )
+
         else:
             raise ValueError(name)
 
@@ -264,6 +275,10 @@ def get_tokenizer(configs: dict, audio_encoder: nn.Module) -> object:
     elif name == "BertXCodec2":
         from music_llm.tokenizers.bert_xcodec import BertXCodecTokenizer
         return BertXCodecTokenizer(audio_encoder.vocab_size)
+
+    elif name == "BertXCodec2ATA":
+        from music_llm.tokenizers.bert_xcodec_ata import BertXCodec2ATATokenizer
+        return BertXCodec2ATATokenizer(audio_encoder.vocab_size)
 
     else:
         raise ValueError(name)
