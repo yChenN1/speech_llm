@@ -56,7 +56,7 @@ class BertXCodec2ATATokenizer:
 
         return LongTensor(batch_ids)
 
-    def audio_codes_to_ids(self, codes: LongTensor) -> LongTensor:
+    def audio_codes_to_ids(self, codes: LongTensor, type: str) -> LongTensor:
         r"""Convert audio codes to tokens, then to IDs.
         E.g. [[[471, 330, ...]]] -> [[30522, 30995, 31878, ...]]
 
@@ -82,8 +82,12 @@ class BertXCodec2ATATokenizer:
         batch_ids = rearrange(batch_ids, 'b t q -> b (t q)')
 
         # Special tokens
-        boa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<boa>")
-        eoa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<eoa>")
+        if type == 'src':
+            boa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<boau>")
+            eoa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<eoau>")
+        elif type == 'trg':
+            boa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<boag>")
+            eoa_ids = np.ones((B, 1), dtype="int64") * self.tok.convert_tokens_to_ids("<eoag>")
 
         batch_ids = np.concatenate((boa_ids, batch_ids, eoa_ids), axis=-1)  # (b, t)
         batch_ids = LongTensor(batch_ids).to(device)

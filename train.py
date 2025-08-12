@@ -223,12 +223,12 @@ def get_dataset(
             return dataset
 
         elif name == 'InstructSpeech':
-            from datasets import load_dataset
+            from audidata.transforms.audio import Mono
+            from music_llm.datasets.Instructspeech import InstructSpeech
             dataset = InstructSpeech(
                 root=configs[ds][name]["root"],
                 split=configs[ds][name]["split"],
                 sr=sr,
-                crop=RandomCrop(clip_duration=clip_duration),
                 transform=Mono(),
                 target_transform=None
             )
@@ -345,6 +345,8 @@ def get_audio_and_caption(data: dict) -> tuple[torch.Tensor, list[str]]:
     elif name in ["FreeSpokenDigit", "LJSpeech", "Shutterstock"]:
         return data["audio"], data["caption"]
 
+    elif name in ['InstructSpeech']:
+        return data["src_audio"], data['trg_audio'], data["caption"], data['src_audio_valid_length'], data['trg_audio_valid_length']
     else:
         raise ValueError(name)
 
@@ -390,7 +392,7 @@ def validate(
         data = default_collate([data])
 
         # 1.1 Prepare audio and captions
-        audio, captions = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
+        src_audio, trg_audio, captions, src_audio_valid_length, trg_audio_valid_length = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
 
         # 1.2 Tokenize captions to IDs
         caption_ids = tokenizer.captions_to_ids(
@@ -399,18 +401,19 @@ def validate(
         ).to(device)  # (b, l_text)
         
         # 1.3 Encode audio into discrete codes
-        audio = audio.to(device)
-        audio_codes = audio_encoder.encode(audio=audio)  # (b, l_code, q)
-
+        src_audio_codes = audio_encoder.encode(audio=src_audio)  # (b, l_code, q)
+        trg_audio_codes = audio_encoder.encode(audio=trg_audio)  # (b, l_code, q)
+        
         # 1.4 Tokenize audio codes to IDs
-        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # (b, l_text)
+        src_audio_ids = tokenizer.audio_codes_to_ids(src_audio_codes, type="src")  # (b, l_text)
+        trg_audio_ids = tokenizer.audio_codes_to_ids(trg_audio_codes, type="trg")  # (b, l_text)
 
         # 1.5 Concatenate text and audio IDs
-        ids = torch.cat((caption_ids, audio_ids), dim=1)  # (b, l)
+        ids = torch.cat((caption_ids, src_audio_ids, trg_audio_ids), dim=1)  # shape: (b, l)
 
         # 1.6 Targets
         target_ids = ids[:, 1 :]
-        mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
+        mask = get_loss_mask(torch.cat((caption_ids, src_audio_ids), dim=1), trg_audio_ids[:, 0: -1])  # (b, l)
 
         # ------ 2. Evaluation ------
         # 2.1 Forward

@@ -15,7 +15,7 @@ from music_llm.utils import parse_yaml
 from train import (get_audio_and_caption, get_audio_encoder, get_dataset,
                    get_loss_mask, get_model, get_optimizer_and_scheduler,
                    get_tokenizer, validate)
-
+from music_llm.datasets.Instructspeech import collate_fn, BucketBatchSampler
 
 def train(args) -> None:
 
@@ -42,15 +42,24 @@ def train(args) -> None:
     test_dataset = get_dataset(configs, split="test")
 
     # Sampler
-    train_sampler = InfiniteSampler(train_dataset)
+    # train_sampler = InfiniteSampler(train_dataset)
     
     # Dataloader
+    sampler = BucketBatchSampler(
+        lengths=train_dataset.src_lengths,
+        batch_size=batch_size,
+        drop_last=False,
+        shuffle=True,
+        bucket_size_multiplier=100,
+        seed=1234,
+    )
+
     train_dataloader = DataLoader(
         dataset=train_dataset, 
-        batch_size=batch_size, 
-        sampler=train_sampler,
+        batch_sampler=sampler,
         num_workers=num_workers, 
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=collate_fn
     )
 
     # Audio encoder
@@ -84,22 +93,28 @@ def train(args) -> None:
 
         # ------ 1. Data preparation ------
         # 1.1 Prepare audio and captions
-        audio, captions = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
+        src_audio, trg_audio, captions, src_audio_valid_length, trg_audio_valid_length = get_audio_and_caption(data)  # audio: (b, c, l_audio), captions: (b, l_text)
 
         # 1.2 Tokenize captions to IDs
         caption_ids = tokenizer.captions_to_ids(
             captions=captions, 
             fix_length=configs["max_caption_len"]
-        ).to(audio.device)  # (b, l_text)
+        ).to(src_audio.device)  # (b, l_text)
 
         # 1.3 Encode audio into discrete codes
-        audio_codes = audio_encoder.module.encode(audio=audio)  # (b, l_code, q)
+        src_audio_codes = audio_encoder.encode(audio=src_audio)  # (b, l_code, q)
+        trg_audio_codes = audio_encoder.encode(audio=trg_audio)  # (b, l_code, q)
+        
+        # for i in range(src_audio_codes.shape[0]):
+        #     src_audio_codes[i] = src_audio_codes[i, :src_audio_valid_length[i], :]
+        #     trg_audio_codes[i] = trg_audio_codes[i, :trg_audio_valid_length[i], :]
 
         # 1.4 Tokenize audio codes to IDs
-        audio_ids = tokenizer.audio_codes_to_ids(audio_codes)  # (b, l_text)
+        src_audio_ids = tokenizer.audio_codes_to_ids(src_audio_codes, type="src")  # (b, l_text)
+        trg_audio_ids = tokenizer.audio_codes_to_ids(trg_audio_codes, type="trg")  # (b, l_text)
 
         # 1.5 Concatenate text and audio IDs
-        ids = torch.cat((caption_ids, audio_ids), dim=1)  # shape: (b, l)
+        ids = torch.cat((caption_ids, src_audio_ids, trg_audio_ids), dim=1)  # shape: (b, l)
 
         # ------ 2. Training ------
         # 2.1 Forward
@@ -109,7 +124,7 @@ def train(args) -> None:
         # 2.2 Targets
         out = logits[:, 0 : -1, :]
         target_ids = ids[:, 1 :]
-        mask = get_loss_mask(caption_ids, audio_ids[:, 0: -1])  # (b, l)
+        mask = get_loss_mask(torch.cat((caption_ids, src_audio_ids), dim=1), trg_audio_ids[:, 0: -1])  # (b, l)
 
         # 2.3 Loss
         loss = ce_loss(
@@ -118,7 +133,6 @@ def train(args) -> None:
             mask=mask, 
             ignore_index=tokenizer.pad_token_id
         )
-        
         # 2.4 Optimize
         optimizer.zero_grad()  # Reset all parameter.grad to 0
         accelerator.backward(loss)  # Update all parameter.grad
@@ -130,8 +144,8 @@ def train(args) -> None:
 
         # ------ 3. Evaluation ------
         # 3.1 Evaluate
-        if step % test_every_n_steps == 0 and accelerator.is_main_process:
 
+        if step % test_every_n_steps == 0 and accelerator.is_main_process:
             train_loss = validate(
                 configs=configs,
                 dataset=train_dataset, 
@@ -144,21 +158,20 @@ def train(args) -> None:
                 configs=configs,
                 dataset=test_dataset, 
                 tokenizer=tokenizer, 
-                audio_encoder=accelerator.unwrap_model(audio_encoder), 
+                audio_encoder=accelerator.unwrap_model(audio_encoder),     
                 model=accelerator.unwrap_model(model)
             )
-
             if wandb_log:
                 wandb.log(
                     data={"train_loss": train_loss, "test_loss": test_loss},
                     step=step
                 )
-
             print("Train loss: {}".format(train_loss))
             print("Test loss: {}".format(test_loss))
         
         # 3.2 Save model
         if step % save_every_n_steps == 0 and accelerator.is_main_process:
+            continue
             ckpt_path = Path(ckpts_dir, f"step={step}.pth")
             torch.save(accelerator.unwrap_model(model).state_dict(), ckpt_path)
             print(f"Save model to {ckpt_path}")

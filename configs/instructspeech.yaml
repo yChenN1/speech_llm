@@ -4,12 +4,12 @@ clip_duration: 10.
 max_caption_len: 100
 
 train_datasets:
-    LJSpeech:
+    InstructSpeech:
         root: "/mnt/fast/nobackup/scratch4weeks/yc01815/Speech_gen_dataset/gen_speech_v1/train_instruct.csv"
         split: "train"
 
 test_datasets:
-    LJSpeech:
+    InstructSpeech:
         root: "/mnt/fast/nobackup/scratch4weeks/yc01815/Speech_gen_dataset/gen_speech_v1/valid_instruct.csv"
         split: "test"
         
@@ -35,8 +35,8 @@ train:
     optimizer: AdamW
     lr: 1e-4
     warm_up_steps: 1000  # Leave blank if no warm up is used
-    batch_size_per_device: 4
-    test_every_n_steps: 2000
+    batch_size_per_device: 2
+    test_every_n_steps: 10
     save_every_n_steps: 20000
     training_steps: 200000
     resume_ckpt_path:  # Leave blank if train from scratch
